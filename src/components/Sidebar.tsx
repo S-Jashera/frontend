@@ -11,9 +11,10 @@ import {
   MessageSquare,
   X,
   ChevronLeft,
-  ChevronRight,
+  Layers,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useAuth } from '../lib/auth';
 
 interface NavItem {
   page: string;
@@ -21,10 +22,18 @@ interface NavItem {
   icon: React.ReactNode;
 }
 
-const navItems: NavItem[] = [
+const cmNavItems: NavItem[] = [
   { page: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
   { page: 'project-explorer', label: 'Project Explorer', icon: <ListChecks size={18} /> },
   { page: 'escalation-center', label: 'Escalation Center', icon: <AlertTriangle size={18} /> },
+  { page: 'communication-center', label: 'Communication Center', icon: <MessageSquare size={18} /> },
+];
+
+const pmNavItems: NavItem[] = [
+  { page: 'pm/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+  { page: 'project-explorer', label: 'Project Explorer', icon: <ListChecks size={18} /> },
+  { page: 'escalation-center', label: 'Escalation Center', icon: <AlertTriangle size={18} /> },
+  { page: 'instance-workspace', label: 'Instance Workspace', icon: <Layers size={18} /> },
   { page: 'communication-center', label: 'Communication Center', icon: <MessageSquare size={18} /> },
 ];
 
@@ -38,7 +47,10 @@ interface SidebarProps {
 export function Sidebar({ mobileOpen, onMobileToggle, collapsed, onCollapsedToggle }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { role } = useAuth();
   const currentPage = pathname.split('/').pop() ?? 'dashboard';
+  const isPM = role === 'pm';
+  const navItems = isPM ? pmNavItems : cmNavItems;
 
   return (
     <>
@@ -118,11 +130,11 @@ export function Sidebar({ mobileOpen, onMobileToggle, collapsed, onCollapsedTogg
         <footer className={cn('px-4 py-4 border-t border-border', collapsed && 'px-2')}>
           <div className={cn('flex items-center gap-3', collapsed && 'justify-center gap-0 px-0')}>
             <div className="w-9 h-9 rounded-full bg-primary-100 border border-secondary-300 flex items-center justify-center flex-shrink-0">
-              <span className="text-xs font-bold text-primary">CM</span>
+              <span className="text-xs font-bold text-primary">{isPM ? 'PM' : 'CM'}</span>
             </div>
             {!collapsed && (
               <div className="min-w-0">
-                <p className="text-sm font-bold text-[#1C1B1B] truncate">Construction Manager</p>
+                <p className="text-sm font-bold text-[#1C1B1B] truncate">{isPM ? 'Project Manager' : 'Construction Manager'}</p>
                 <p className="text-[10px] text-neutral-500 tracking-widest uppercase">OPS CONTROL CENTER</p>
               </div>
             )}

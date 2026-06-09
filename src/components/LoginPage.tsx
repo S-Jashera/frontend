@@ -7,7 +7,7 @@ import { useAuth } from '../lib/auth';
 import { useRouter } from 'next/navigation';
 
 export function LoginPage() {
-  const { setAuthed } = useAuth();
+  const { setAuthed, setRole } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -69,7 +69,7 @@ export function LoginPage() {
   }
 
   localStorage.setItem('role', role);
-
+  setRole(role);
   setAuthed(true);
 
   if (role === 'cm') {
