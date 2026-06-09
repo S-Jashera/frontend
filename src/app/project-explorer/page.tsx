@@ -82,6 +82,19 @@ export default function ProjectExplorerPage() {
         completedActivities: 18,
         totalActivities: 24,
         escalations: 2,
+      },  
+      
+ {
+        id: '5',
+        project: 'Reserve Kandivali',
+        towerId: '1',
+        tower: 'Reserve T1',
+        floor: 'F24',
+        pour: 'P02-Slab',
+        currentDay: 'Day 1',
+        completedActivities: 4,
+        totalActivities: 24,
+        escalations: 0,
       },
       {
         id: '2',

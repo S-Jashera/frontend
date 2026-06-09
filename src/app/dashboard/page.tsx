@@ -4,19 +4,29 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { normalizeFilterParam } from '../../lib/cascadingFilters';
 import {
+  Building,
   Building2,
+  Layers,
   AlertTriangle,
+  ShieldAlert,
   Clock,
-  TrendingDown,
-  CheckCircle2,
   ChevronRight,
   ChevronDown,
-  Droplets,
 } from 'lucide-react';
 import { Card, KPICard } from '../../components/common/Card';
-import { HealthBadge, HealthDot } from '../../components/common/StatusBadge';
-import { mockTowers, mockEscalations, mockTicUpdates } from '../../data/mock';
+import { mockTowers, mockEscalations } from '../../data/mock';
 import type { Tower } from '../../types';
+import { BarChart, Bar, XAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+
+function Legend() {
+  return (
+    <div className="flex items-center gap-4 text-[11px] text-neutral-500">
+      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-success"></div> Completed</div>
+      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-primary"></div> In Progress</div>
+      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-neutral-200"></div> Not Started</div>
+    </div>
+  );
+}
 
 function TowerCard({
   tower,
@@ -25,92 +35,183 @@ function TowerCard({
   tower: Tower;
   onOpen: () => void;
 }) {
-  // Mock values for UI only
-  const activeFloors = 3;
-  const activePours = 6;
-  const currentFocus =
-    tower.current_day >= 6
-      ? 'Pour Readiness'
-      : tower.current_day >= 4
-      ? 'Day-4 Lock'
-      : 'Execution';
+  const router = useRouter();
+  const totalFloors = 20;
 
-  const latestUpdate =
-    tower.open_risks > 0
-      ? 'Action Required'
-      : 'Execution On Track';
+  // Derive P1 and P2 active floors based on tower state
+  const p1ActiveFloor = Math.min(20, tower.active_pour === 1 ? tower.active_floor : tower.active_floor + 1);
+  const p2ActiveFloor = Math.max(1, tower.active_pour === 1 ? tower.active_floor - 1 : tower.active_floor);
+
+  const p1Completed = Math.max(0, p1ActiveFloor - 1);
+  const p1Current = p1Completed < 20 ? 1 : 0;
+  const p1Remaining = 20 - p1Completed - p1Current;
+
+  const p2Completed = Math.max(0, p2ActiveFloor - 1);
+  const p2Current = p2Completed < 20 ? 1 : 0;
+  const p2Remaining = 20 - p2Completed - p2Current;
+
+  const data = [
+    {
+      name: 'P1',
+      completed: p1Completed,
+      current: p1Current,
+      remaining: p1Remaining,
+      activeFloor: p1ActiveFloor,
+    },
+    {
+      name: 'P2',
+      completed: p2Completed,
+      current: p2Current,
+      remaining: p2Remaining,
+      activeFloor: p2ActiveFloor,
+    },
+  ];
+
+  const overallCompleted = Math.max(0, tower.active_floor - 1);
+  const completionPercentage = Math.round((overallCompleted / totalFloors) * 100);
+
+  const activityEscalations = tower.open_risks;
+  const preconditionEscalations = Math.floor(tower.open_risks / 2);
+
+  const [hoveredSection, setHoveredSection] = useState<{ bar: string, key: string } | null>(null);
+
+  const handleBarClick = (dataKey: string, payload: any) => {
+    if (dataKey === 'current') {
+      const query = new URLSearchParams({
+        project: normalizeFilterParam(tower.project),
+        tower: normalizeFilterParam(tower.name),
+      }).toString();
+      router.push(`/project-explorer?${query}`);
+    }
+  };
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      if (!hoveredSection || hoveredSection.bar !== label) return null;
+
+      const dataObj = payload[0].payload;
+      const key = hoveredSection.key;
+
+      if (key === 'completed') {
+        const comp = dataObj.completed;
+        return (
+          <div className="bg-white p-2 border border-border shadow-md rounded text-xs z-50 relative">
+            <p className="font-semibold mb-1">Completed Floors</p>
+            {comp > 0 ? <p>F01 – F{comp.toString().padStart(2, '0')}</p> : <p>None</p>}
+          </div>
+        );
+      }
+      
+      if (key === 'current') {
+        return (
+          <div className="bg-white p-2 border border-border shadow-md rounded text-xs z-50 relative">
+            <p className="font-semibold mb-1">Pour: {label}</p>
+            <p>Current Floor: F{dataObj.activeFloor.toString().padStart(2, '0')}</p>
+            <p>Current Day: Day {tower.current_day}</p>
+            <p>Health Index: {tower.health === 'good' ? '100%' : '82%'}</p>
+          </div>
+        );
+      }
+
+      if (key === 'remaining') {
+        const comp = dataObj.completed;
+        const cur = dataObj.current;
+        const start = comp + cur + 1;
+        return (
+          <div className="bg-white p-2 border border-border shadow-md rounded text-xs z-50 relative">
+            <p className="font-semibold mb-1">Pending Floors</p>
+            {start <= 20 ? <p>F{start.toString().padStart(2, '0')} – F20</p> : <p>None</p>}
+          </div>
+        );
+      }
+    }
+    return null;
+  };
 
   return (
-    <Card hover onClick={onOpen} className="p-4">
-      <div className="flex items-start justify-between mb-3">
+    <Card hover className="p-4 flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-4">
         <div>
           <h3 className="text-sm font-semibold text-[#1C1B1B]">
             {tower.name}
           </h3>
-
           <p className="text-[11px] text-neutral-400">
             {tower.project}
           </p>
         </div>
-
-        <ChevronRight
-          size={14}
-          className="text-neutral-400"
-        />
+        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+          completionPercentage === 100 ? 'bg-success-light text-success' :
+          completionPercentage > 50 ? 'bg-success-light text-success' :
+          completionPercentage > 25 ? 'bg-warning-light text-warning' :
+          'bg-error-light text-error'
+        }`}>
+          {completionPercentage}%
+        </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <div>
-          <p className="text-[10px] text-neutral-400 uppercase tracking-wide">
-            Active Floors
-          </p>
-
-          <p className="text-base font-bold text-[#1C1B1B]">
-            {activeFloors}
-          </p>
-        </div>
-
-        <div>
-          <p className="text-[10px] text-neutral-400 uppercase tracking-wide">
-            Active Pours
-          </p>
-
-          <p className="text-base font-bold text-[#1C1B1B]">
-            {activePours}
-          </p>
-        </div>
+      {/* Chart visualization */}
+      <div className="flex-1 mb-4 h-[160px] min-h-[160px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} barSize={45} margin={{ top: 0, right: 90, bottom: 0, left: 90 }}>
+            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#737373' }} />
+            <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} isAnimationActive={false} />
+            <Bar 
+              dataKey="completed" 
+              stackId="a" 
+              fill="var(--color-success, #22c55e)" 
+              onMouseEnter={(data) => setHoveredSection({ bar: data.payload?.name || data.name, key: 'completed' })}
+              onMouseLeave={() => setHoveredSection(null)}
+            />
+            <Bar 
+              dataKey="current" 
+              stackId="a" 
+              fill="var(--color-primary, #2563eb)" 
+              onClick={(data) => handleBarClick('current', data)}
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={(data) => setHoveredSection({ bar: data.payload?.name || data.name, key: 'current' })}
+              onMouseLeave={() => setHoveredSection(null)}
+            />
+            <Bar 
+              dataKey="remaining" 
+              stackId="a" 
+              fill="#e5e5e5" 
+              onMouseEnter={(data) => setHoveredSection({ bar: data.payload?.name || data.name, key: 'remaining' })}
+              onMouseLeave={() => setHoveredSection(null)}
+            />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
 
-      <div className="space-y-2 mb-3">
-        <div>
-          <p className="text-[10px] text-neutral-400 uppercase tracking-wide">
-            Current Focus
-          </p>
+      {/* Footer Info */}
+      <div className="text-[11px] font-medium text-[#1C1B1B] mb-2">Completion: {completionPercentage}%</div>
+      <div className="text-[11px] text-neutral-500 mb-4">Completed Floors: {overallCompleted} / {totalFloors}</div>
 
-          <p className="text-xs font-medium text-[#1C1B1B]">
-            {currentFocus}
-          </p>
-        </div>
-
-        <div>
-          <p className="text-[10px] text-neutral-400 uppercase tracking-wide">
-            Latest Update
-          </p>
-
-          <p className="text-xs text-[#1C1B1B]">
-            {latestUpdate}
-          </p>
-        </div>
+      <div className="grid grid-cols-2 gap-y-2 text-[11px] mb-4">
+        <div className="text-neutral-500">P1 Active Floor</div>
+        <div className="font-medium text-[#1C1B1B]">F{p1ActiveFloor.toString().padStart(2, '0')}</div>
+        
+        <div className="text-neutral-500">P2 Active Floor</div>
+        <div className="font-medium text-[#1C1B1B]">F{p2ActiveFloor.toString().padStart(2, '0')}</div>
       </div>
 
-      <div className="border-t border-border pt-3">
-        <p className="text-[11px] text-primary font-medium">
+      <div className="grid grid-cols-2 gap-y-2 text-[11px] mb-4">
+        <div className="text-neutral-500">Activity Escalations</div>
+        <div className="font-medium text-error">{activityEscalations}</div>
+        
+        <div className="text-neutral-500">Precondition Escalations</div>
+        <div className="font-medium text-warning">{preconditionEscalations}</div>
+      </div>
+
+      <div className="border-t border-border pt-3 mt-auto cursor-pointer group" onClick={onOpen}>
+        <p className="text-[11px] text-primary font-medium group-hover:underline">
           Open Tower →
         </p>
       </div>
     </Card>
   );
 }
+
 function ProjectSection({
   projectName,
   towers,
@@ -126,7 +227,6 @@ function ProjectSection({
     (t) => t.status === 'active'
   ).length;
 
-  // Mock values for now
   const activeInstances = activeCount * 2;
   const activityEscalations = towers.reduce(
     (sum, tower) => sum + tower.open_risks,
@@ -197,32 +297,49 @@ function ProjectSection({
   );
 }
 
-function PendingUpdatesWidget() {
-  const towerUpdates = [
-    { tower: 'Reserve T2', type: 'EoD Missing', time: '21:00', status: 'missing' as const },
-    { tower: 'Ascend T3', type: 'No Update > 4hrs', time: '4h ago', status: 'overdue' as const },
-    { tower: 'Pinnacle T3', type: 'SoD Missing', time: '07:00', status: 'missing' as const },
+function PendingUpdatesWidget({ router }: { router: any }) {
+  const instanceUpdates = [
+    { project: 'Reserve Kandivali', tower: 'Reserve T2', floor: 14, pour: 1, type: 'EoD Missing', time: '2h ago', status: 'missing' as const },
+    { project: 'Reserve Kandivali', tower: 'Reserve T2', floor: 15, pour: 2, type: 'SoD Pending', time: '3h ago', status: 'pending' as const },
+    { project: 'Ascend Thane', tower: 'Ascend T1', floor: 18, pour: 1, type: 'No Update > 4h', time: '4h ago', status: 'overdue' as const },
+    { project: 'Pinnacle Borivali', tower: 'Pinnacle T3', floor: 5, pour: 2, type: 'EoD Missing', time: '5h ago', status: 'missing' as const },
+    { project: 'Ascend Thane', tower: 'Ascend T2', floor: 12, pour: 1, type: 'SoD Missing', time: '6h ago', status: 'missing' as const },
   ];
 
   return (
     <Card className="p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-[#1C1B1B]">Pending Updates</h3>
-        <span className="text-xs bg-error-light text-error px-2 py-0.5 rounded-full font-medium">{towerUpdates.length}</span>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-[#1C1B1B]">Pending Updates <span className="ml-2 text-xs bg-error-light text-error px-2 py-0.5 rounded-full font-medium">{instanceUpdates.length}</span></h3>
+        <span className="text-[11px] text-primary cursor-pointer hover:underline">View All</span>
       </div>
-      <div className="space-y-2">
-        {towerUpdates.map((u, i) => (
+      <div className="space-y-3">
+        {instanceUpdates.map((u, i) => (
           <div key={i} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${u.status === 'overdue' ? 'bg-warning' : 'bg-error'}`} />
+            <div className="flex items-center gap-3">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-error-light text-error`}>
+                <Clock size={14} />
+              </div>
               <div>
-                <p className="text-xs font-medium text-[#1C1B1B]">{u.tower}</p>
-                <p className="text-[11px] text-neutral-500">{u.type}</p>
+                <p className="text-xs font-medium text-[#1C1B1B]">{u.tower} {'>'} F{u.floor.toString().padStart(2, '0')} {'>'} P{u.pour.toString().padStart(2, '0')}</p>
+                <p className={`text-[11px] font-medium ${u.status === 'pending' ? 'text-warning' : 'text-error'}`}>{u.type}</p>
               </div>
             </div>
-            <div className="flex items-center gap-1 text-[11px] text-neutral-400">
-              <Clock size={11} />
-              {u.time}
+            <div className="flex flex-col items-end gap-1">
+              <div className="text-[10px] text-neutral-400">
+                {u.time}
+              </div>
+              <div 
+                className="text-[10px] text-primary font-medium cursor-pointer hover:underline"
+                onClick={() => {
+                  const query = new URLSearchParams({
+                    project: normalizeFilterParam(u.project),
+                    tower: normalizeFilterParam(u.tower),
+                  }).toString();
+                  router.push(`/project-explorer?${query}`);
+                }}
+              >
+                Open →
+              </div>
             </div>
           </div>
         ))}
@@ -234,11 +351,6 @@ function PendingUpdatesWidget() {
 export default function DashboardPage() {
   const router = useRouter();
   const projects = Array.from(new Set(mockTowers.map((t) => t.project)));
-  const criticalTowers = mockTowers.filter((t) => t.health === 'critical').length;
-  const atRiskTowers = mockTowers.filter((t) => t.health === 'at_risk').length;
-  const totalRisks = mockTowers.reduce((a, t) => a + t.open_risks, 0);
-  const openEscalations = mockEscalations.filter((e) => e.status !== 'closed').length;
-  const upcomingPours = mockTowers.filter((t) => t.current_day >= 6);
 
   function handleTowerClick(towerId: string) {
     const tower = mockTowers.find((t) => t.id === towerId);
@@ -260,48 +372,55 @@ export default function DashboardPage() {
       {/* Project Summary KPIs */}
       <section>
         <h2 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-3">Summary</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-  <KPICard
-    label="Projects"
-    value={3}
-  />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <KPICard
+            label="Projects"
+            value={3}
+            icon={<Building size={14} />}
+          />
 
-  <KPICard
-    label="Active Towers"
-    value={9}
-    icon={<Building2 size={14} />}
-  />
+          <KPICard
+            label="Active Towers"
+            value={9}
+            icon={<Building2 size={14} />}
+          />
 
-  <KPICard
-    label="Active Instances"
-    value={14}
-  />
+          <KPICard
+            label="Active Instances"
+            value={14}
+            icon={<Layers size={14} />}
+          />
 
-  <KPICard
-    label="Activity Escalations"
-    value={5}
-    variant="error"
-    icon={<AlertTriangle size={14} />}
-  />
+          <KPICard
+            label="Activity Escalations"
+            value={5}
+            variant="error"
+            icon={<AlertTriangle size={14} />}
+          />
 
-  <KPICard
-    label="Precondition Escalations"
-    value={3}
-    variant="warning"
-  />
+          <KPICard
+            label="Precondition Escalations"
+            value={3}
+            variant="warning"
+            icon={<ShieldAlert size={14} />}
+          />
 
-  <KPICard
-    label="Pending Updates"
-    value={1}
-    variant="warning"
-  />
-</div>
+          <KPICard
+            label="Pending Updates"
+            value={5}
+            variant="error"
+            icon={<Clock size={14} />}
+          />
+        </div>
       </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Projects & Towers */}
-        <section className="lg:col-span-2">
-          <h2 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-3">Active Projects</h2>
+        <section className="lg:col-span-3">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-[#1C1B1B]">Towers Overview</h2>
+            <Legend />
+          </div>
           {projects.map((project) => {
             const projectTowers = mockTowers.filter((t) => t.project === project);
             return (
@@ -316,110 +435,10 @@ export default function DashboardPage() {
         </section>
 
         {/* Right column */}
-        <section className="space-y-4">
-          <PendingUpdatesWidget />
-
-          {/* Upcoming Pours */}
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-[#1C1B1B]">Upcoming Pours</h3>
-              <Droplets size={14} className="text-primary" />
-            </div>
-            {upcomingPours.length === 0 ? (
-              <p className="text-xs text-neutral-400">No pours in next 48 hours</p>
-            ) : (
-              <div className="space-y-2">
-                {upcomingPours.map((t) => (
-                  <div
-                    key={t.id}
-                    className="flex items-center justify-between py-2 border-b border-border last:border-0 cursor-pointer group"
-                    onClick={() => router.push('/pour-readiness')}
-                  >
-                    <div>
-                      <p className="text-xs font-medium text-[#1C1B1B] group-hover:text-primary transition-colors">{t.name}</p>
-                      <p className="text-[11px] text-neutral-500">Fl. {t.active_floor} · P{t.active_pour}</p>
-                    </div>
-                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded ${t.current_day === 7 ? 'bg-success-light text-success' : 'bg-warning-light text-warning'}`}>
-                      {t.current_day === 7 ? 'Today' : 'Tomorrow'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-
-          {/* Critical Escalations */}
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-[#1C1B1B]">Critical Escalations</h3>
-              <span className="text-xs bg-error-light text-error px-2 py-0.5 rounded-full font-medium">{openEscalations}</span>
-            </div>
-            <div className="space-y-2">
-              {mockEscalations.slice(0, 3).map((esc) => (
-                <div
-                  key={esc.id}
-                  className="flex items-start gap-2 py-2 border-b border-border last:border-0 cursor-pointer group"
-                  onClick={() => router.push('/escalation-center')}
-                >
-                  <div className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${esc.severity === 'critical' ? 'bg-error' : 'bg-warning'}`} />
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-[#1C1B1B] group-hover:text-primary transition-colors truncate">{esc.title}</p>
-                    <p className="text-[11px] text-neutral-500">{esc.tower_name} · SLA: {esc.sla_remaining}h left</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => router.push('/escalation-center')}
-              className="mt-3 text-xs text-primary font-medium hover:underline flex items-center gap-1"
-            >
-              View all escalations <ChevronRight size={12} />
-            </button>
-          </Card>
+        <section className="lg:col-span-1 space-y-4">
+          <PendingUpdatesWidget router={router} />
         </section>
       </div>
-
-      {/* Recent TIC Updates */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">Recent TIC Updates</h2>
-          <button onClick={() => router.push('/communication-center')} className="text-xs text-primary font-medium hover:underline flex items-center gap-1">
-            View all <ChevronRight size={12} />
-          </button>
-        </div>
-        <Card className="divide-y divide-border">
-          {mockTicUpdates.slice(0, 5).map((u) => {
-            const typeColors: Record<string, string> = {
-              sod: 'bg-success-light text-success',
-              eod: 'bg-primary-100 text-primary-600',
-              risk: 'bg-warning-light text-warning',
-              escalation: 'bg-error-light text-error',
-              activity: 'bg-neutral-100 text-neutral-600',
-              fallback: 'bg-alert-light text-alert',
-            };
-            const typeLabels: Record<string, string> = {
-              sod: 'SoD', eod: 'EoD', risk: 'Risk', escalation: 'Escalation', activity: 'Activity', fallback: 'Fallback',
-            };
-            return (
-              <div key={u.id} className="flex items-start gap-4 p-3 hover:bg-neutral-50 transition-colors">
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded flex-shrink-0 mt-0.5 ${typeColors[u.update_type]}`}>
-                  {typeLabels[u.update_type]}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-xs font-medium text-[#1C1B1B]">{u.tower_name}</span>
-                    <span className="text-[11px] text-neutral-400">Fl. {u.floor}</span>
-                  </div>
-                  <p className="text-[11px] text-neutral-600 truncate">{u.message}</p>
-                </div>
-                <div className="flex-shrink-0 text-[11px] text-neutral-400">
-                  {new Date(u.submitted_at).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })}
-                </div>
-              </div>
-            );
-          })}
-        </Card>
-      </section>
     </div>
   );
 }
