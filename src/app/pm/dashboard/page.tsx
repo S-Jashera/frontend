@@ -151,35 +151,31 @@ export default function PMDashboardPage() {
       </div>
 
       {/* KPI Strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard
-          label="Active Towers"
-          value={5}
-          sub="Across Projects"
-          icon={<Building2 size={16} />}
-        />
-        <KPICard
-          label="Active Instances"
-          value={12}
-          sub="Across 5 Towers"
-          variant="warning"
-          icon={<Layers size={16} />}
-        />
-        <KPICard
-          label="Open Escalations"
-          value={14}
-          sub="Needs Attention"
-          variant="error"
-          icon={<ShieldAlert size={16} />}
-        />
-        <KPICard
-          label="SLA Breaches"
-          value={2}
-          sub="Require Action"
-          variant="error"
-          icon={<Clock size={16} />}
-        />
-      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          <KPICard
+            label="Active Towers"
+            value={5}
+            icon={<Building2 size={14} />}
+          />
+          <KPICard
+            label="Active Instances"
+            value={12}
+            variant="warning"
+            icon={<Layers size={14} />}
+          />
+          <KPICard
+            label="Open Escalations"
+            value={14}
+            variant="error"
+            icon={<ShieldAlert size={14} />}
+          />
+          <KPICard
+            label="SLA Breaches"
+            value={2}
+            variant="error"
+            icon={<Clock size={14} />}
+          />
+        </div>
 
       {/* Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
@@ -196,8 +192,8 @@ export default function PMDashboardPage() {
               <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-neutral-200"></div> Remaining Floors</div>
             </div>
           </div>
-          <div className="w-full mt-4">
-            <ResponsiveContainer width="100%" height={300}>
+          <div className="flex-1 mb-4 h-[160px] min-h-[160px] w-full">
+            <ResponsiveContainer width={600} height={300}>
               <BarChart
                 data={mockTowers}
                 margin={{ top: 20, right: 30, left: 0, bottom: 40 }}

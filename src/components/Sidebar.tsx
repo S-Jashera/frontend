@@ -11,6 +11,7 @@ import {
   MessageSquare,
   X,
   ChevronLeft,
+  ChevronRight,
   Layers,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
